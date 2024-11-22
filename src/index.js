@@ -2,14 +2,16 @@
 // this syntax conflicts our ES6 style of code and thus reduces consistency
 
 import dotenv from "dotenv";
-dotenv.config({path: "./.env"});
+dotenv.config();
+
 import connectDB from "./db/index.js";
 import { app } from "./app.js";
 
-const serverPORT = process.env.PORT || 8000;
+
 
 connectDB()
 .then(() => {
+    const serverPORT = process.env.PORT || 8000;
     app.on("error", (err) => {
         console.error("App listening error!! ", err);
         exit(1);
