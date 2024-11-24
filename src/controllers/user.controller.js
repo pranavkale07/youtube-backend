@@ -317,6 +317,8 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
         {new: true}
     ).select("-password -refreshToken")
 
+    // TODO: delete old image from cloudinary (same for cover image also)
+
     return res
     .status(200)
     .json(
@@ -354,6 +356,83 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     )
 })
 
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+    const {username} = req.params
+    
+    if(!username?.trim()){
+        throw new ApiError(400, "username is missing")
+    }
+
+    // Perform aggregation on the User collection
+    const channel = await User.aggregate([
+        // Stage 1: Filter the user by the provided username (to get _id of the target user)
+        {
+            $match: {
+                username: username?.toLowerCase()   // Match username (case-insensitive, converted to lowercase)
+            }
+        },
+        // Stage 2: Find all subscribers of the target user
+        {
+            $lookup: {
+                // note: current(local) collection is 'User' and foreign collection is 'subscriptions'
+                from: "subscriptions",   // in mongodb "Subscription" becomes "subscriptions" i.e. lowercase and plural
+                localField: "_id",
+                foreignField: "channel",
+                as: "subscribers"   // Save the result as `subscribers` array
+            }
+        },
+         // Stage 3: Find all channels that the target user has subscribed to
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "subscriber",
+                as: "subscribedTo"
+            }
+        },
+        // Stage 4: Add calculated fields
+        {
+            $addFields: {
+                subscribersCount: {
+                    $size: "$subscribers"   // Count the size of the `subscribers` array
+                },
+                channelsSubscribedToCount: {
+                    $size: "$subscribedTo"  // Count the size of the `subscribedTo` array
+                },
+                isSubscribed: {
+                    $condition: {
+                        if: {$in: [req.user?._id, "$subscribers.subscriber"]},  // Check if current user's _id exists in target user's `subscribers.subscriber`
+                        then: true,
+                        else: false
+                    }
+                }
+            }
+        },
+        // Stage 5: Select only the fields needed for the response
+        {
+            $project: {
+                fullname: 1,
+                username: 1,
+                subscribersCount: 1,
+                channelsSubscribedToCount: 1,
+                isSubscribed: 1,
+                avatar: 1,
+                coverImage: 1
+            }
+        }
+    ])
+
+    if(!channel?.length){
+        throw new ApiError(404, "channel does not exist")
+    }
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200, channel[0], "channel info fetched successfully")
+    )
+})
+
 export {
     registerUser,
     loginUser,
@@ -363,6 +442,7 @@ export {
     getCurrentUser,
     updateAccountDetails,
     updateUserAvatar,
-    updateUserCoverImage
+    updateUserCoverImage,
+    getUserChannelProfile
 }
 
