@@ -3,6 +3,7 @@ import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/fileUpload.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
+import mongoose from "mongoose";
 import jwt from "jsonwebtoken"
 
 const generateAccessAndRefreshToken = async (userId) =>{
@@ -167,6 +168,7 @@ const loginUser = asyncHandler(async (req, res) => {
 
 const logoutUser = asyncHandler(async (req, res) => {
     // challenge: to get user id
+    // solution: added auth middleware (verifyJWT) which finds the user from access token cookie and inserts the user in the request body
 
     await User.findByIdAndUpdate(
         req.user._id,
@@ -248,7 +250,15 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 const changeCurrentPassword = asyncHandler(async (req, res) => {
     const {oldPassword, newPassword} = req.body;
 
+    if (!oldPassword || !newPassword) {
+        throw new ApiError(400, "Both oldPassword and newPassword are required.");
+    }
+
     const user = await User.findById(req.user?._id);
+
+    if (!user) {
+        throw new ApiError(404, "User not found.");
+    }
 
     const isPasswordValid = await user.isPasswordCorrect(oldPassword);
 
@@ -310,14 +320,14 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
 
     const newAvatar = await uploadOnCloudinary(avatarLocalPath);
 
-    if(!avatar.url){
+    if(!newAvatar.url){
         throw new ApiError(400, "error while uploading avatar on cloudinary")
     }
 
     const user = await User.findByIdAndUpdate(
         req.user._id,
         {
-            $ser: {
+            $set: {
                 avatar: newAvatar.url
             }
         },
@@ -349,7 +359,7 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     const user = await User.findByIdAndUpdate(
         req.user._id,
         {
-            $ser: {
+            $set: {
                 coverImage: newCoverImage.url
             }
         },
@@ -407,7 +417,7 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
                     $size: "$subscribedTo"  // Count the size of the `subscribedTo` array
                 },
                 isSubscribed: {
-                    $condition: {
+                    $cond: {
                         if: {$in: [req.user?._id, "$subscribers.subscriber"]},  // Check if current user's _id exists in target user's `subscribers.subscriber`
                         then: true,
                         else: false
