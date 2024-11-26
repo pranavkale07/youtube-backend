@@ -2,6 +2,7 @@ import { asyncHandler } from "../utils/asyncHandler.js"
 import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/uploadOnCloudinary.js";
+import { deleteFromCloudinary } from "../utils/deleteFromCloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken"
@@ -312,6 +313,7 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
 })
 
 const updateUserAvatar = asyncHandler(async (req, res) => {
+    const oldAvatarURL = req.user.avatar;
     const avatarLocalPath = req.file?.path
 
     if(!avatarLocalPath){
@@ -335,6 +337,7 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
     ).select("-password -refreshToken")
 
     // TODO: delete old image from cloudinary (same for cover image also)
+    await deleteFromCloudinary(oldAvatarURL);
 
     return res
     .status(200)
@@ -344,6 +347,7 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
 })
 
 const updateUserCoverImage = asyncHandler(async (req, res) => {
+    const oldCoverImageURL = req.user.coverImage;
     const coverImageLocalPath = req.file?.path
 
     if(!coverImageLocalPath){
@@ -365,6 +369,9 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
         },
         {new: true}
     ).select("-password")
+
+    // deleting old cover image from cloudinary
+    await deleteFromCloudinary(oldCoverImageURL);
 
     return res
     .status(200)
